@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>阿輝英文日課</title>
+  <meta name="description" content="每日打卡、單字本、閱讀清單的個人英文學習 App">
+  <meta name="theme-color" content="#f4f7f5">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1 id="title">阿輝英文日課</h1>
+    <span id="syncDot" class="sync-dot" title="同步狀態"></span>
+  </header>
+  <main id="view" aria-live="polite"></main>
+  <nav class="tabs" aria-label="主選單">
+    <a href="#today" data-tab="today"><span>☀️</span>今天</a>
+    <a href="#words" data-tab="words"><span>📒</span>單字本</a>
+    <a href="#review" data-tab="review"><span>🔁</span>複習</a>
+    <a href="#read" data-tab="read"><span>📖</span>閱讀</a>
+    <a href="#settings" data-tab="settings"><span>⚙️</span>設定</a>
+  </nav>
+  <div id="modal" class="modal" hidden><div class="sheet" id="sheet"></div></div>
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
