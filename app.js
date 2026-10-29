@@ -1,16 +1,25 @@
-/* 阿輝英文日課 v0.1.0（2026-10-27）
+/* 阿輝英文日課 v0.2.0（2026-10-30；v0.1.0 2026-10-27）
    三件事：每日打卡、單字本（快速加入＋單字卡＋間隔複習）、閱讀清單（小輝每週排的 7 篇）。
+   v0.2（規劃書 v2 第七節）：每天 40 分鐘＋Funday 真人課（另外算）、VOA 全文在程式裡讀、生字表顏色與例句出處、片語卡由小輝送進單字本。
    資料存在這台的 IndexedDB；填了 Apps Script 網址和密語就跟手機、平板、網頁互相同步（做法照 34.修行紀錄App）。
    ⚠️ 本程式放在公開的 GitHub Pages：程式碼裡不放任何文章、單字或個人資料。 */
 'use strict';
-const VERSION = 'v0.1.0';
-const START = '2026-10-28'; // 每天 30 分鐘起算日（規劃書第一節）
+const VERSION = 'v0.2.0';
+const START = '2026-10-28'; // 90 天起算日（規劃書 v1 第一節；v2 的 12 週計畫從 11/1 起，見規劃書 v2 第六節）
+const DAILY = 40; // 每天目標分鐘（規劃書 v2 第二節）
+const LIVE_GOAL = 3; // Funday 真人課每週至少幾堂（另外算，不進每天分鐘數）
 const GOAL = { days: 90, hit: 80 };
 const LEVELS = ['A1', 'A1+', 'A2', 'A2+', 'B1', 'B1+', 'B2', 'B2+', 'C1']; // 升一級＝往上兩格，降半級＝往下一格
 const FEEL = { easy: '太簡單', ok: '剛好', hard: '太難' };
 const MIN_ITEMS = [['funday', 'Funday'], ['speak', 'Speak'], ['read', '閱讀'], ['review', '複習']];
 const SOURCES = ['Funday', 'Speak', '工作', 'Reader 文章', '閱讀清單', '影片', '生活', '其他'];
 const STORES = ['checkins', 'words', 'reads', 'prefs']; // 會同步的四種資料
+// 生字表顏色（小輝排清單時用官方字表比對後標好；規劃書 v2 第三節）
+const WTAGS = { base: ['基本', '國中小基本 1200 字'], hs: ['常用', '大考詞彙表第 1～4 級'], adv: ['進階', '大考詞彙表第 5～6 級'],
+  phrase: ['片語', '片語'], key: ['關鍵字', '文章關鍵字（不在兩份字表）'] };
+const KINDS = { voa: 'VOA', yang: '楊陽講義', reader: 'Reader', wsj: 'WSJ 挑戰' };
+const dictUrl = t => 'https://dictionary.cambridge.org/zht/%E8%A9%9E%E5%85%B8/%E8%8B%B1%E8%AA%9E-%E6%BC%A2%E8%AA%9E-%E7%B9%81%E9%AB%94/'
+  + encodeURIComponent(String(t || '').trim().toLowerCase().replace(/\s+/g, '-'));
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -125,7 +134,7 @@ async function syncNow(manual) {
     const got = await applyPull(j);
     await kvSet('sync', Object.assign(await kvGet('sync', {}), { lastPull: j.now, lastAt: nowIso(), lastError: '' }));
     const imp = (j.imported || []).filter(x => !x.error);
-    if (imp.length) toast('📬 收到小輝的更新：閱讀 ' + imp.reduce((n, x) => n + x.reads, 0) + ' 篇、單字 ' + imp.reduce((n, x) => n + x.words, 0) + ' 個', 4000);
+    if (imp.length) toast('📬 收到小輝的更新：閱讀 ' + imp.reduce((n, x) => n + x.reads, 0) + ' 篇、補單字 ' + imp.reduce((n, x) => n + x.words, 0) + ' 個、新卡 ' + imp.reduce((n, x) => n + (x.cards || 0), 0) + ' 張', 4000);
     else if (manual) toast(`已同步：送出 ${sent}、收到 ${got}`);
     setDot('ok');
     if (got && $('#modal').hidden && !['settings'].includes(currentTab())) route();
@@ -159,8 +168,13 @@ function setDot(cls) { const d = $('#syncDot'); if (d) d.className = 'sync-dot '
 
 /* ---------- 打卡與連續天數 ---------- */
 const minutes = c => c ? MIN_ITEMS.reduce((n, [k]) => n + (Number(c[k]) || 0), 0) : 0;
+const weekStart = (k = todayKey()) => shiftDay(k, -new Date(k + 'T00:00:00').getDay()); // 週日開始（12 週計畫 11/1 是週日）
+async function liveThisWeek() {
+  const from = weekStart(), to = shiftDay(from, 6);
+  return (await dbAll('checkins')).filter(c => c.id >= from && c.id <= to).reduce((n, c) => n + (Number(c.live) || 0), 0);
+}
 async function checkinStats() {
-  const all = await dbAll('checkins'), done = new Set(all.filter(c => minutes(c) > 0).map(c => c.id));
+  const all = await dbAll('checkins'), done = new Set(all.filter(c => minutes(c) > 0 || Number(c.live) > 0).map(c => c.id));
   const today = todayKey();
   let streak = 0, d = done.has(today) ? today : shiftDay(today, -1);
   while (done.has(d)) { streak++; d = shiftDay(d, -1); }
@@ -239,7 +253,7 @@ async function renderToday(v) {
   const st = await checkinStats(), words = await dbAll('words'), due = words.filter(canReview).length;
   const pending = words.filter(w => w.status === 'pending').length;
   const week = await currentWeek(), next = week.list.find(r => !r.done);
-  const started = k >= START;
+  const started = k >= START, live = await liveThisWeek();
   const pct = Math.round(st.hit / GOAL.hit * 100);
   v.innerHTML = `
     <div class="card">
@@ -248,13 +262,17 @@ async function renderToday(v) {
       <div style="margin-top:10px" class="muted">${started ? `90 天目標：第 ${st.elapsed} 天，已打卡 <b>${st.hit}</b> / ${GOAL.hit} 天` : `${START} 開始算 90 天（目標 ${GOAL.hit} 天）`}</div>
       <div class="bar"><i style="width:${Math.min(100, pct)}%"></i></div>
     </div>
-    <div class="card"><h2>今天的 30 分鐘</h2>
+    <div class="card"><h2>今天的 ${DAILY} 分鐘 <span class="muted" style="font-weight:normal">（${minutes(c) >= DAILY ? '✅ 達標' : `還差 ${DAILY - minutes(c)}`}）</span></h2>
       ${MIN_ITEMS.map(([key, name]) => `<div class="min-row"><span>${name}</span>
         <input type="number" inputmode="numeric" min="0" max="300" data-min="${key}" value="${Number(c[key]) || ''}" placeholder="0" aria-label="${name}分鐘">
         <button class="small" data-add="${key}" data-n="5">+5</button><button class="small" data-add="${key}" data-n="10">+10</button></div>`).join('')}
       <label for="note">一句話（可空白）</label>
       <input id="note" value="${esc(c.note || '')}" placeholder="例如：Speak 練了點餐對話">
-      <div class="muted" style="margin-top:6px">建議：Speak 10＋Funday／閱讀 15＋複習 5。數字一改就會存。</div>
+      <div class="muted" style="margin-top:6px">建議：Speak 10＋閱讀 20（日課文章或 Funday 文章）＋複習 10。數字一改就會存。</div>
+    </div>
+    <div class="card"><h2>Funday 真人會話課 <span class="muted" style="font-weight:normal">（另外算）</span></h2>
+      <div class="row"><div class="grow">本週（週日起）已上 <b>${live}</b> / ${LIVE_GOAL} 堂${live >= LIVE_GOAL ? ' ✅' : ''}<div class="muted">今天 ${Number(c.live) || 0} 堂・目標每週 3～5 堂、每堂 40 分鐘</div></div>
+        <button class="small" id="live-minus">－1</button><button class="primary small" id="live-plus">＋1 堂</button></div>
     </div>
     <div class="card"><h2>接下來</h2>
       <div class="row"><div class="grow">🔁 到期要複習的單字 <b>${due}</b> 個${pending ? `<div class="muted">另有 ${pending} 個待小輝補齊</div>` : ''}</div><a class="btn ${due ? 'primary' : ''}" href="#review">去複習</a></div>
@@ -277,6 +295,15 @@ async function renderToday(v) {
     if (first) { toast('✅ 今天打卡了！'); renderToday(v); }
   }));
   $('#quickAdd', v).addEventListener('click', () => openQuickAdd());
+  const liveAdd = async n => {
+    const rec = await dbGet('checkins', k) || { id: k };
+    rec.live = Math.max(0, Math.min(5, (Number(rec.live) || 0) + n));
+    await save('checkins', rec);
+    if (n > 0) toast('👍 真人課 +1 堂');
+    renderToday(v);
+  };
+  $('#live-plus', v).addEventListener('click', () => liveAdd(1));
+  $('#live-minus', v).addEventListener('click', () => liveAdd(-1));
 }
 
 /* 快速加入 */
@@ -329,13 +356,15 @@ async function renderWords(v) {
   $$('[data-id]', v).forEach(li => li.onclick = () => openWord(li.dataset.id));
 }
 
-const WORD_FIELDS = [['term', '單字／片語'], ['pos', '詞性'], ['zh', '中文'], ['en', '簡單英文解釋'], ['example', '生活化例句'], ['ipa', '音標'],
+const WORD_FIELDS = [['term', '單字／片語'], ['pos', '詞性'], ['zh', '中文'], ['en', '簡單英文解釋'], ['example', '生活化例句'],
+  ['exsrc', '例句出處（「AI 例句」＝小輝寫的；覺得怪就在這裡寫「怪」）'], ['ipa', '音標'],
   ['sentence', '原文句子'], ['source', '出處'], ['mine', '自己造的句子（可以丟給 claude.ai 家教批改）']];
 async function openWord(id) {
   const w = await dbGet('words', id); if (!w) return;
   openModal(`
     <div class="row"><h2 class="grow" style="margin:0">${esc(w.term)}</h2><button id="w-say">🔊</button></div>
-    <div class="muted">加入 ${esc((w.addedAt || '').slice(0, 10))}・${w.status === 'pending' ? '待處理' : '完成'}${w.srs?.due ? '・下次複習 ' + esc(w.srs.due) : ''}</div>
+    <div class="muted">加入 ${esc(w.addedAt ? todayKey(new Date(w.addedAt)) : '')}・${w.status === 'pending' ? '待處理' : '完成'}${w.srs?.due ? '・下次複習 ' + esc(w.srs.due) : ''}
+      ・<a href="${esc(safeUrl(w.dict || dictUrl(w.term)))}" target="_blank" rel="noopener">查字典 ↗</a></div>
     ${WORD_FIELDS.map(([k, n]) => `<label for="w-${k}">${n}</label>${['example', 'sentence', 'mine', 'en'].includes(k) ? `<textarea id="w-${k}">${esc(w[k] || '')}</textarea>` : `<input id="w-${k}" value="${esc(w[k] || '')}">`}`).join('')}
     <label><input type="checkbox" id="w-ready" ${w.status !== 'pending' ? 'checked' : ''} style="width:auto"> 已經補齊（不再是「待處理」）</label>
     <div class="row" style="margin-top:12px"><button class="primary grow" id="w-save">儲存</button><button id="w-close">關閉</button></div>
@@ -432,8 +461,9 @@ async function renderRead(v) {
   $$('[data-open]', v).forEach(b => b.onclick = () => { openRead = openRead === b.dataset.open ? '' : b.dataset.open; renderRead(v); });
   $$('[data-addw]', v).forEach(b => b.onclick = async () => {
     const r = wk.list.find(x => x.id === b.dataset.read), p = (r.preview || [])[Number(b.dataset.addw)];
-    await save('words', { id: uid('w'), term: p.term, zh: p.zh || '', en: p.en || '', example: p.example || '', pos: p.pos || '', ipa: p.ipa || '',
-      source: '閱讀清單', sentence: p.sentence || '', readId: r.id, status: p.zh && p.example ? 'ready' : 'pending', addedAt: nowIso(), srs: null });
+    await save('words', { id: uid('w'), term: p.term, zh: p.zh || '', en: p.en || '', example: p.example || '', exsrc: p.example_src || '', pos: p.pos || '', ipa: p.ipa || '',
+      source: '閱讀清單：' + r.title, sentence: p.sentence || '', dict: p.dict || '', wtag: p.tag || '', readId: r.id,
+      status: p.zh && p.example ? 'ready' : 'pending', addedAt: nowIso(), srs: null });
     toast(`已加入「${p.term}」`); renderRead(v);
   });
   $$('[data-say]', v).forEach(b => b.onclick = () => speak(b.dataset.say));
@@ -448,7 +478,7 @@ async function renderRead(v) {
     Object.assign(r, { done: true, feel, summary, doneAt: r.doneAt || nowIso() });
     await save('reads', r);
     openRead = '';
-    if (first) await addMinutes('read', 15); else toast('已更新');
+    if (first) await addMinutes('read', 20); else toast('已更新');
     renderRead(v);
   });
   $$('[data-undo]', v).forEach(b => b.onclick = async () => { const r = await dbGet('reads', b.dataset.undo); r.done = false; await save('reads', r); openRead = r.id; renderRead(v); });
@@ -458,14 +488,20 @@ function readCard(r, words) {
   const mine = words.filter(w => w.readId === r.id).length;
   const open = openRead === r.id;
   return `<div class="card read-card ${r.done ? 'done' : ''}">
-    <div class="row"><span class="tag">${esc(r.level || '?')}</span>${r.topic ? `<span class="tag gold">${esc(r.topic)}</span>` : ''}${r.done ? `<span class="tag">✓ ${esc(FEEL[r.feel] || '')}</span>` : ''}<span class="muted">第 ${esc(r.order || '')} 篇</span></div>
+    <div class="row"><span class="tag">${esc(r.level || '?')}</span>${r.kind ? `<span class="tag kind">${esc(KINDS[r.kind] || r.kind)}</span>` : ''}${r.topic ? `<span class="tag gold">${esc(r.topic)}</span>` : ''}${r.done ? `<span class="tag">✓ ${esc(FEEL[r.feel] || '')}</span>` : ''}<span class="muted">第 ${esc(r.order || '')} 篇</span></div>
     <div class="title" style="margin-top:6px">${esc(r.title)}</div>
     ${r.note ? `<div class="muted">${esc(r.note)}</div>` : ''}
     ${r.done && r.summary ? `<div style="margin-top:6px">📝 ${esc(r.summary)}</div>` : ''}
-    <div class="row" style="margin-top:8px">${r.url ? `<a class="btn primary" href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener">讀原文 ↗</a>` : ''}<button data-open="${esc(r.id)}">${open ? '收起' : r.done ? '看內容' : '生字・簡化版・讀完'}</button></div>
+    <div class="row" style="margin-top:8px">${r.url ? `<a class="btn ${r.body ? '' : 'primary'}" href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener">${r.body ? '原文網頁' : '讀原文'} ↗</a>` : ''}${r.audio ? `<a class="btn" href="${esc(safeUrl(r.audio))}" target="_blank" rel="noopener">🎧 音檔</a>` : ''}<button class="${r.body && !open ? 'primary' : ''}" data-open="${esc(r.id)}">${open ? '收起' : r.done ? '看內容' : r.body ? '在這裡讀全文・生字' : '生字・簡化版・讀完'}</button></div>
     ${open ? `
-      ${(r.preview || []).length ? `<h2 style="margin-top:12px">生字預習</h2><ul class="preview">${r.preview.map((p, i) => `<li><div class="grow"><b>${esc(p.term)}</b> <button class="small" data-say="${esc(p.term)}">🔊</button> ${esc(p.zh || '')}
-        ${p.example ? `<div class="muted">${esc(p.example)}</div>` : ''}</div>
+      ${r.body ? `<div class="article">${String(r.body).split(/\n\s*\n/).map(t => `<p>${esc(t.trim())}</p>`).join('')}</div>
+        <div class="muted">來源：${esc(r.credit || 'VOA Learning English（美國政府作品，公共領域）')}</div>` : ''}
+      ${(r.preview || []).length ? `<h2 style="margin-top:12px">生字表</h2>
+        <div class="legend">${Object.entries(WTAGS).map(([k, [n, d]]) => `<span class="wt wt-${k}" title="${esc(d)}">${n}</span>`).join('')}</div>
+        <ul class="preview">${r.preview.map((p, i) => `<li><div class="grow"><b>${esc(p.term)}</b> ${p.tag && WTAGS[p.tag] ? `<span class="wt wt-${esc(p.tag)}" title="${esc(WTAGS[p.tag][1])}">${WTAGS[p.tag][0]}</span>` : ''}
+          <button class="small" data-say="${esc(p.term)}">🔊</button> <span class="muted">${esc(p.pos || '')}</span> ${esc(p.zh || '')}
+          <a class="small-link" href="${esc(safeUrl(p.dict || dictUrl(p.term)))}" target="_blank" rel="noopener">字典↗</a>
+        ${p.example ? `<div class="muted">${esc(p.example)}${p.example_src ? ` <span class="src">（${esc(p.example_src)}）</span>` : ''}</div>` : ''}</div>
         ${added.has(String(p.term).toLowerCase()) ? '<span class="tag">已加入</span>' : `<button class="small" data-addw="${i}" data-read="${esc(r.id)}">＋單字本</button>`}</li>`).join('')}</ul>` : ''}
       ${r.simple ? `<details ${r.done ? '' : 'open'}><summary>小輝寫的簡化版</summary><div class="simple">${esc(r.simple)}</div></details>` : ''}
       <h2 style="margin-top:12px">${r.done ? '讀完紀錄' : '讀完了嗎？'}</h2>

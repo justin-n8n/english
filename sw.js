@@ -1,6 +1,6 @@
 /* 離線快取（照 34.修行紀錄App 的 sw.js）：有網路時先抓最新版並更新快取；網路慢 3 秒或沒網路時用快取。
    新增檔案時把它加進 FILES，並把 VERSION 加一。 */
-const VERSION = 'english-v0.1.0';
+const VERSION = 'english-v0.2.0';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

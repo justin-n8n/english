@@ -77,3 +77,13 @@ label { display: block; font-size: 14px; color: var(--muted); margin: 8px 0 3px;
 a { color: var(--accent); }
 details summary { cursor: pointer; color: var(--accent); }
 @media (min-width: 700px) { body { font-size: 18px; } }
+/* v0.2：生字表顏色、VOA 全文（規劃書 v2 第三節） */
+.tag.kind { background: transparent; border: 1px solid var(--line); color: var(--muted, inherit); }
+.article { margin: 12px 0 6px; font-size: 17px; line-height: 1.75; }
+.article p { margin: 0 0 12px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+.wt { display: inline-block; font-size: 11px; padding: 0 7px; border-radius: 99px; color: #fff; vertical-align: 1px; white-space: nowrap; }
+.wt-base { background: #2f6fd1; } .wt-hs { background: #2e9b5a; } .wt-adv { background: #d9822b; } .wt-phrase { background: #8a4fc8; }
+.wt-key { background: transparent; color: inherit; border: 1px solid var(--line); }
+.small-link { font-size: 12px; margin-left: 4px; }
+.src { font-size: 12px; opacity: .8; }
