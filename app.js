@@ -1,10 +1,11 @@
-/* 阿輝英文日課 v0.2.0（2026-10-30；v0.1.0 2026-10-27）
+/* 阿輝英文日課 v0.2.1（2026-10-30；v0.2.0 同日、v0.1.0 2026-10-27）
    三件事：每日打卡、單字本（快速加入＋單字卡＋間隔複習）、閱讀清單（小輝每週排的 7 篇）。
    v0.2（規劃書 v2 第七節）：每天 40 分鐘＋Funday 真人課（另外算）、VOA 全文在程式裡讀、生字表顏色與例句出處、片語卡由小輝送進單字本。
+   v0.2.1：設定頁加「📘 說明」（使用說明＋維護說明，#help）、閱讀來源加 ICRT。說明內容跟著流程改（43 號 CLAUDE.md 第二節）。
    資料存在這台的 IndexedDB；填了 Apps Script 網址和密語就跟手機、平板、網頁互相同步（做法照 34.修行紀錄App）。
    ⚠️ 本程式放在公開的 GitHub Pages：程式碼裡不放任何文章、單字或個人資料。 */
 'use strict';
-const VERSION = 'v0.2.0';
+const VERSION = 'v0.2.1';
 const START = '2026-10-28'; // 90 天起算日（規劃書 v1 第一節；v2 的 12 週計畫從 11/1 起，見規劃書 v2 第六節）
 const DAILY = 40; // 每天目標分鐘（規劃書 v2 第二節）
 const LIVE_GOAL = 3; // Funday 真人課每週至少幾堂（另外算，不進每天分鐘數）
@@ -17,7 +18,7 @@ const STORES = ['checkins', 'words', 'reads', 'prefs']; // 會同步的四種資
 // 生字表顏色（小輝排清單時用官方字表比對後標好；規劃書 v2 第三節）
 const WTAGS = { base: ['基本', '國中小基本 1200 字'], hs: ['常用', '大考詞彙表第 1～4 級'], adv: ['進階', '大考詞彙表第 5～6 級'],
   phrase: ['片語', '片語'], key: ['關鍵字', '文章關鍵字（不在兩份字表）'] };
-const KINDS = { voa: 'VOA', yang: '楊陽講義', reader: 'Reader', wsj: 'WSJ 挑戰' };
+const KINDS = { voa: 'VOA', icrt: 'ICRT', yang: '楊陽講義', reader: 'Reader', wsj: 'WSJ 挑戰' };
 const dictUrl = t => 'https://dictionary.cambridge.org/zht/%E8%A9%9E%E5%85%B8/%E8%8B%B1%E8%AA%9E-%E6%BC%A2%E8%AA%9E-%E7%B9%81%E9%AB%94/'
   + encodeURIComponent(String(t || '').trim().toLowerCase().replace(/\s+/g, '-'));
 
@@ -236,13 +237,14 @@ function speak(text) {
 const currentTab = () => (location.hash.slice(1) || 'today').split('/')[0];
 async function route() {
   const tab = currentTab();
-  $$('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
+  $$('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'help' ? 'settings' : tab)));
   const v = $('#view');
   try {
     if (tab === 'words') await renderWords(v);
     else if (tab === 'review') await renderReview(v);
     else if (tab === 'read') await renderRead(v);
     else if (tab === 'settings') await renderSettings(v);
+    else if (tab === 'help') renderHelp(v);
     else await renderToday(v);
   } catch (e) { v.innerHTML = `<div class="card">畫面出錯了：${esc(e.message)}</div>`; }
 }
@@ -518,6 +520,7 @@ async function renderSettings(v) {
   const cfg = await kvGet('sync', {}), theme = safe(() => localStorage.getItem('theme')) || 'auto';
   const level = await getPref('level', 'A2');
   v.innerHTML = `
+    <div class="card"><div class="row"><div class="grow"><h2 style="margin:0">📘 說明</h2><div class="muted">怎麼用、出問題怎麼辦</div></div><a class="btn primary" href="#help">打開說明</a></div></div>
     <div class="card"><h2>☁️ 雲端同步</h2>
       <div class="muted">填你自己部署的 Apps Script 網址和密語（步驟見 43 號 程式/02.雲端同步/雲端同步_設定步驟.md）。手機、平板、網頁填一樣的就會互相同步。</div>
       <label for="s-url">Apps Script 網址</label><input id="s-url" value="${esc(cfg.url || '')}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
@@ -574,6 +577,65 @@ async function renderSettings(v) {
       toast(`匯入 ${n} 筆`);
     } catch (err) { toast('匯入失敗：' + err.message, 4000); }
   };
+}
+/* 說明（使用說明＋維護說明）：只寫做法，不放網址、密語或個人資料（這個檔是公開的） */
+const HELP_USE = [
+  ['☀️ 每天 40 分鐘怎麼做', `<ol>
+    <li><b>通勤</b>：手機開 Speak 練 10 分鐘。</li>
+    <li><b>晚上</b>：「📖 閱讀」讀今天那一篇（或 Funday 文章）20 分鐘，再到「🔁 複習」把到期的卡做完（約 10 分鐘）。</li>
+    <li>回「☀️ 今天」把各項分鐘數按 +5／+10（讀完文章會自動加 20 分鐘閱讀），有分鐘數就算打卡，一句話可以空白；數字一改就存好了。</li>
+    <li><b>Funday 真人會話課</b>每週 3～5 堂、每堂 40 分鐘，另外算：上完在「今天」按「＋1 堂」。</li>
+  </ol><p class="muted">做到 40 分鐘最好；忙的時候做一點也算打卡，連續天數不會斷。</p>`],
+  ['📖 閱讀：每天一篇', `<ul>
+    <li>清單上方的週次選單可以看其他週；App 裡永遠排好接下來 3 週（小輝每週日補一週）。</li>
+    <li>標籤說明來源：<b>ICRT</b>（按「讀原文」到 ICRT 網站讀，🎧 可以聽）、<b>VOA</b>（在這裡讀全文、可聽音檔）、<b>楊陽講義</b>（雲端硬碟 PDF，附單字表與中譯）、<b>WSJ 挑戰</b>（每週一篇，只讀建議的段落就好）。</li>
+    <li>文章下面是<b>生字表</b>，顏色：<span class="wt wt-base">基本</span>國中小 1200 字、<span class="wt wt-hs">常用</span>大考 1～4 級、<span class="wt wt-adv">進階</span>大考 5～6 級、<span class="wt wt-phrase">片語</span>、<span class="wt wt-key">關鍵字</span>不在兩份字表。</li>
+    <li>想記的字按「＋單字本」；文章裡自己發現的生字按「＋自己找到的生字」。不用每個都加，挑真的想用的。</li>
+    <li>讀完按「太簡單／剛好／太難」，用一句中文寫重點，再按「✓ 讀完了」。難度會照你的感覺自動提示升降級。</li>
+  </ul><p class="muted">例句後面會標出處；寫「AI 例句」的是小輝寫的。</p>`],
+  ['📒 單字本與 🔁 複習', `<ul>
+    <li>遇到新字隨時按「快速加入」，只寫單字也可以，會標成「待處理」，小輝週日補中文、解釋、例句和音標。</li>
+    <li>點一張卡可以看全部內容、自己寫句子、🔊 朗讀、查字典或刪除。</li>
+    <li>複習：先想意思再按「看答案」，照記得的程度按 <b>忘了／模糊／記得／很熟</b>，App 會自動排下次複習的日子。</li>
+    <li>片語一天一個，小輝已經排好日期；還沒到的卡會顯示日期，到那天才出現在複習。</li>
+  </ul>`],
+  ['📅 每週日：處理英文', `<p>週日晚上跟小輝說「<b>處理英文</b>」。小輝會讀你這週的打卡、讀完紀錄和待處理單字，補好單字、再排一週文章和片語，你在「⚙️ 設定」按「立刻同步」就收到了。</p>
+    <p class="muted">12 週檢查點：11/28、12/26、2027-01-23（看打卡天數、難度、能不能讀完一篇英文用中文講重點）。</p>`],
+];
+const HELP_MAINT = [
+  ['☁️ 資料存在哪裡', `<ul>
+    <li>每台裝置自己存一份，填了 Apps Script 網址和密語後，會跟你雲端硬碟裡的試算表互相同步（手機、平板、電腦看到一樣的資料）。</li>
+    <li>這個 App 的程式是公開的，但<b>程式裡沒有任何文章、單字或個人資料</b>；資料只在你的裝置和你的雲端硬碟。</li>
+    <li>密語放在電腦桌面「機密備份_不同步」，不要貼給別人或貼在對話裡。</li>
+  </ul>`],
+  ['📱 換新手機／新裝置', `<ol>
+    <li>用瀏覽器打開 App 網址，加到主畫面。</li>
+    <li>「⚙️ 設定」→ 填 Apps Script 網址和密語 → 「儲存並測試」，看到「連線成功」就會自動把雲端資料抓下來。</li>
+  </ol>`],
+  ['⚠️ 出問題怎麼辦', `<ul>
+    <li><b>沒看到新版或新文章</b>：先按「立刻同步」；還是沒有就把 App 完全關掉再打開（新版要重開一次才換）。</li>
+    <li><b>右上角的點</b>：綠色＝同步好了、黃色＝同步中或沒網路（有網路會自動補送）、橘紅色＝同步失敗（到設定看原因）、灰色＝還沒設定雲端同步。</li>
+    <li><b>「密語不對」</b>：重新填一次密語。<b>「Apps Script 忙碌中」</b>：另一台正在同步，等一下會自動再試。</li>
+    <li><b>資料看起來不對</b>：設定 →「從雲端還原」→「從雲端全部重抓」（這台還沒送出的不會被蓋掉）。</li>
+    <li>刪掉的單字卡會留在試算表的「已刪除」分頁，不會在別台復活。</li>
+  </ul>`],
+  ['🔧 程式與 Apps Script 怎麼更新', `<ul>
+    <li><b>App 程式</b>：小輝改好、問過你才推上 GitHub，大約 1 分鐘後網址就是新版；這頁最下面看得到版本號。</li>
+    <li><b>Apps Script</b>（雲端同步那支程式）：小輝改好後，你把新的程式碼整份貼上，按「管理部署作業 → ✏️ 編輯 → 版本選『新版本』→ 部署」。<b>不要按「新增部署作業」</b>，不然網址會變、每台都要重填。</li>
+    <li><b>小輝怎麼送資料進來</b>：小輝在電腦的交換資料夾放一個匯入檔，Apps Script 同步時讀進來，讀完改名成「已匯入」；只會補空的欄位，不會蓋掉你寫的紀錄。</li>
+  </ul>`],
+  ['💾 備份', `<p>有雲端同步就不太需要另外備份。想多一份保險時，設定 →「匯出備份」存一個 JSON 檔；換裝置時可以「匯入備份」，只會補比較新的資料。</p>`],
+  ['🧑‍🤝‍🧑 分工', `<ul>
+    <li><b>阿輝</b>：每天 40 分鐘、Funday 真人課、週日說「處理英文」、Apps Script 部署、密語。</li>
+    <li><b>小輝</b>：每週排文章與生字表、補單字、片語、改程式、檢查點整理數據。</li>
+  </ul>`],
+];
+function renderHelp(v) {
+  const sec = (title, list) => `<div class="card"><h2>${title}</h2>${list.map(([t, h], i) =>
+    `<details ${i === 0 ? 'open' : ''} style="margin-top:8px"><summary><b>${t}</b></summary><div class="help">${h}</div></details>`).join('')}</div>`;
+  v.innerHTML = `<div class="row" style="margin:4px 0 8px"><a class="btn small" href="#settings">← 回設定</a></div>
+    ${sec('📘 使用說明', HELP_USE)}${sec('🔧 維護說明', HELP_MAINT)}
+    <div class="card muted">阿輝英文日課 ${VERSION}・說明最後更新 2026-10-30</div>`;
 }
 /** 第一次連上雲端時，把這台原本的資料都排進待同步 */
 async function markAllForSync() {

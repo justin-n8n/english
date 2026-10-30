@@ -87,3 +87,6 @@ details summary { cursor: pointer; color: var(--accent); }
 .wt-key { background: transparent; color: inherit; border: 1px solid var(--line); }
 .small-link { font-size: 12px; margin-left: 4px; }
 .src { font-size: 12px; opacity: .8; }
+.help { margin: 6px 0 4px; line-height: 1.7; }
+.help ul, .help ol { padding-left: 1.3em; margin: 6px 0; }
+.help li { margin: 4px 0; }
