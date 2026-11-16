@@ -90,3 +90,18 @@ details summary { cursor: pointer; color: var(--accent); }
 .help { margin: 6px 0 4px; line-height: 1.7; }
 .help ul, .help ol { padding-left: 1.3em; margin: 6px 0; }
 .help li { margin: 4px 0; }
+/* v0.2.2 詳細說明（help.js，由 md 轉成的 HTML） */
+.help-tabs { position: sticky; top: calc(44px + env(safe-area-inset-top, 0px)); z-index: 4; background: var(--bg); padding: 6px 0 8px; }
+.help-doc { overflow-wrap: anywhere; }
+.help-doc h1 { font-size: 20px; color: var(--accent); margin: 6px 0 8px; }
+.help-doc h2 { font-size: 17px; color: var(--accent); border-bottom: 1px solid var(--line); padding-bottom: 4px; margin: 22px 0 8px; }
+.help-doc h3 { font-size: 15.5px; margin: 16px 0 4px; }
+.help-doc blockquote { margin: 10px 0; padding: 6px 12px; background: var(--soft); border-left: 4px solid var(--accent); border-radius: 0 8px 8px 0; }
+.help-doc blockquote p { margin: 4px 0; }
+.help-doc table { border-collapse: collapse; width: 100%; font-size: 14px; display: block; overflow-x: auto; margin: 8px 0; }
+.help-doc th, .help-doc td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; min-width: 7em; overflow-wrap: break-word; }
+.help-doc td:first-child, .help-doc th:first-child { min-width: 5.5em; }
+.help-doc th { background: var(--soft); white-space: nowrap; }
+.help-doc pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow-x: auto; font-size: 12.5px; line-height: 1.45; }
+.help-doc code { background: var(--soft); border-radius: 4px; padding: 0 4px; font-size: .9em; }
+.help-doc pre code { background: none; padding: 0; }

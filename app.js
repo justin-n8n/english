@@ -2,10 +2,11 @@
    三件事：每日打卡、單字本（快速加入＋單字卡＋間隔複習）、閱讀清單（小輝每週排的 7 篇）。
    v0.2（規劃書 v2 第七節）：每天 40 分鐘＋Funday 真人課（另外算）、VOA 全文在程式裡讀、生字表顏色與例句出處、片語卡由小輝送進單字本。
    v0.2.1：設定頁加「📘 說明」（使用說明＋維護說明，#help）、閱讀來源加 ICRT。說明內容跟著流程改（43 號 CLAUDE.md 第二節）。
+   v0.2.2（2026-11-16）：說明頁分四頁：⚡ 精簡（原本的）＋📘 使用、📥 加文章、🔧 維護三份詳細版（help.js，正本 43 號 文件說明/*.md）。
    資料存在這台的 IndexedDB；填了 Apps Script 網址和密語就跟手機、平板、網頁互相同步（做法照 34.修行紀錄App）。
    ⚠️ 本程式放在公開的 GitHub Pages：程式碼裡不放任何文章、單字或個人資料。 */
 'use strict';
-const VERSION = 'v0.2.1';
+const VERSION = 'v0.2.2';
 const START = '2026-10-28'; // 90 天起算日（規劃書 v1 第一節；v2 的 12 週計畫從 11/1 起，見規劃書 v2 第六節）
 const DAILY = 40; // 每天目標分鐘（規劃書 v2 第二節）
 const LIVE_GOAL = 3; // Funday 真人課每週至少幾堂（另外算，不進每天分鐘數）
@@ -583,7 +584,7 @@ const HELP_USE = [
   ['☀️ 每天 40 分鐘怎麼做', `<ol>
     <li><b>通勤</b>：手機開 Speak 練 10 分鐘。</li>
     <li><b>晚上</b>：「📖 閱讀」讀今天那一篇（或 Funday 文章）20 分鐘，再到「🔁 複習」把到期的卡做完（約 10 分鐘）。</li>
-    <li>回「☀️ 今天」把各項分鐘數按 +5／+10（讀完文章會自動加 20 分鐘閱讀），有分鐘數就算打卡，一句話可以空白；數字一改就存好了。</li>
+    <li>回「☀️ 今天」把各項分鐘數按 +5／+10（讀完文章會自動加 20 分鐘閱讀），有分鐘數或有上真人課就算打卡，一句話可以空白；數字一改就存好了。</li>
     <li><b>Funday 真人會話課</b>每週 3～5 堂、每堂 40 分鐘，另外算：上完在「今天」按「＋1 堂」。</li>
   </ol><p class="muted">做到 40 分鐘最好；忙的時候做一點也算打卡，連續天數不會斷。</p>`],
   ['📖 閱讀：每天一篇', `<ul>
@@ -630,12 +631,22 @@ const HELP_MAINT = [
     <li><b>小輝</b>：每週排文章與生字表、補單字、片語、改程式、檢查點整理數據。</li>
   </ul>`],
 ];
+/* v0.2.2：詳細版（使用／加文章／維護）在 help.js 的 HELP_DOCS，由 43 號 程式/工具/產生說明網頁.py 從 文件說明/ 的 .md 產生，不要手改 help.js */
+const HELP_TABS = [['quick', '⚡ 精簡'], ['use', '📘 使用'], ['add', '📥 加文章'], ['maint', '🔧 維護']];
+let helpTab = 'quick';
 function renderHelp(v) {
   const sec = (title, list) => `<div class="card"><h2>${title}</h2>${list.map(([t, h], i) =>
     `<details ${i === 0 ? 'open' : ''} style="margin-top:8px"><summary><b>${t}</b></summary><div class="help">${h}</div></details>`).join('')}</div>`;
+  const docs = typeof HELP_DOCS === 'object' ? HELP_DOCS : null;
+  const body = helpTab === 'quick'
+    ? `${sec('📘 使用說明（精簡）', HELP_USE)}${sec('🔧 維護說明（精簡）', HELP_MAINT)}
+       <div class="card muted">想看每個按鈕、文章怎麼來、出問題怎麼查，點上面的「📘 使用」「📥 加文章」「🔧 維護」。</div>`
+    : `<div class="card help help-doc">${docs && docs[helpTab] ? docs[helpTab] : '<p>詳細說明還沒載入，連上網路再打開一次。</p>'}</div>`;
   v.innerHTML = `<div class="row" style="margin:4px 0 8px"><a class="btn small" href="#settings">← 回設定</a></div>
-    ${sec('📘 使用說明', HELP_USE)}${sec('🔧 維護說明', HELP_MAINT)}
-    <div class="card muted">阿輝英文日課 ${VERSION}・說明最後更新 2026-10-30</div>`;
+    <div class="filters help-tabs">${HELP_TABS.map(([k, n]) => `<button class="small ${k === helpTab ? 'sel' : ''}" data-h="${k}">${n}</button>`).join('')}</div>
+    ${body}
+    <div class="card muted">阿輝英文日課 ${VERSION}・說明最後更新 2026-11-16</div>`;
+  v.querySelectorAll('[data-h]').forEach(b => b.onclick = () => { helpTab = b.dataset.h; renderHelp(v); window.scrollTo(0, 0); });
 }
 /** 第一次連上雲端時，把這台原本的資料都排進待同步 */
 async function markAllForSync() {
