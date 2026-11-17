@@ -163,3 +163,30 @@ details.src div { margin: 2px 0; }
 .q-en { font-size: 20px; line-height: 1.6; margin: 10px 0 6px; font-weight: 600; }
 .topics button { margin-bottom: 2px; }
 .word-item .muted button { vertical-align: middle; }
+/* v0.6.0：字庫主題卡片、已讀、三段進度條、月曆、名言、我的小語 */
+.topic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.topic-card { display: block; margin: 0; color: var(--ink); text-decoration: none; }
+.topic-card .tc-name { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+.lexlist .rd { border: 0; background: transparent; font-size: 22px; padding: 0 2px; line-height: 1; }
+.lexlist li.lr .lw { color: var(--muted); }
+.bar3 { position: relative; }
+.bar3 i { position: absolute; left: 0; top: 0; }
+i.r, .dot.r { background: #8fb9d6; }
+.bar3 i.c { background: var(--accent); } .bar3 i.l { background: var(--gold); }
+.chart .bars i { width: 28%; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 10px 0 6px; text-align: center; }
+.cal-h { font-size: 12px; color: var(--muted); }
+.cal-d { padding: 8px 0; border-radius: 8px; font-size: 14px; }
+.cal-d.part { background: var(--soft); border-color: var(--accent); }
+.cal-d.full { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.cal-d.today { outline: 2px solid var(--gold); }
+.cal-d.pick { box-shadow: 0 0 0 3px var(--ink) inset; }
+.cal-d.in12 { text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+.dot.full { background: var(--accent); } .dot.part { background: var(--soft); border: 1px solid var(--accent); }
+.dot.in12 { background: transparent; border-bottom: 2px solid var(--gold); border-radius: 0; }
+.day-detail { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 8px; }
+.day-detail > div { padding: 4px 0; }
+.famous { border-top: 1px dashed var(--line); margin-top: 12px; padding-top: 10px; }
+.mine-item { padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.mine-item:last-child { border-bottom: 0; }
+.mine-item .q-en { font-size: 17px; margin: 2px 0; }
