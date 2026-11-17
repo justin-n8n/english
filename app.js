@@ -1,4 +1,4 @@
-/* 阿輝英文日課 v0.6.0（2026-11-17 晚：字庫選完進學習頁＋每個字已讀／還沒讀、📅 進度月曆、單字「已讀」進度、日報與舊週從 11/23 往後排、💬 60 則名言（附出處）、✍️ 我的小語；規劃 43 號 規劃/改版規劃_20261117_v1.md）
+/* 阿輝英文日課 v0.6.1（11/17 20:54：字庫每次進學習頁，顯示篩選自動回「全部」）。v0.6.0（2026-11-17 晚：字庫選完進學習頁＋每個字已讀／還沒讀、📅 進度月曆、單字「已讀」進度、日報與舊週從 11/23 往後排、💬 60 則名言（附出處）、✍️ 我的小語；規劃 43 號 規劃/改版規劃_20261117_v1.md）
    v0.5.0（2026-11-17 晚：字庫依主題學、🧩 片語、☀️ 每日小語、全面 🔊、🎤 跟讀、▶️ 連續播放）／v0.4.0（同日：📚 字庫、❓ 說明放到下方選單）／v0.3.0（2026-11-17；v0.2.2 2026-11-16、v0.2.0／v0.2.1 2026-10-30、v0.1.0 2026-10-27）
    v0.3.0（規劃 43 號 規劃/App改版規劃_20261117_v1.md；Justin 11/17：「全部都要做」「VOA不要了」「現在就開始」）：
    ・12 週從 2026-11-23（一）重新起算、目標 84 天打卡 75 天；一週改從週一開始；可以補記前 3 天。
@@ -8,7 +8,7 @@
    資料存在這台的 IndexedDB；填了 Apps Script 網址和密語就跟手機、平板、網頁互相同步（做法照 34.修行紀錄App）。
    ⚠️ 本程式放在公開的 GitHub Pages：程式碼裡不放任何文章、單字或個人資料（wordlist.js 是公開的官方字表，只有字和級別）。 */
 'use strict';
-const VERSION = 'v0.6.0';
+const VERSION = 'v0.6.1';
 const START = '2026-11-23'; // 12 週起算日（v0.3.0 起；Justin 11/17「預計從下星期一開始學習」）
 const GOAL = { days: 84, hit: 75 }; // 規劃書 v2：12 週、打卡 75 天以上
 const CHECKPOINTS = ['2026-12-20', '2027-01-17', '2027-02-14'];
@@ -861,6 +861,7 @@ async function renderLex(v, head) {
   const [top, sub] = lexParts(), q = lexQuery.trim().toLowerCase();
   // ① 主畫面：大主題卡片
   if (!top && !q) {
+    lexKey = ''; // v0.6.1：離開學習頁，下次進來篩選回「全部」
     const readAll = items.filter(isRead).length;
     v.innerHTML = `${head}
       <div class="card"><h2 style="margin:0">📚 字庫：依主題學</h2>
@@ -875,6 +876,7 @@ async function renderLex(v, head) {
   }
   // ② 子主題清單
   if (top && !sub && !q) {
+    lexKey = '';
     const inTop = items.filter(it => topOf(it) === top);
     const subs = top === 'X' ? [...new Set(inTop.map(subOf))].sort().map(k => [k, k]) : (TOPICS.find(t => t[0] === top) || ['', '', []])[2];
     v.innerHTML = `${head}
@@ -886,7 +888,7 @@ async function renderLex(v, head) {
   }
   // ③ 學習頁（或搜尋結果）
   const key = q ? 'q:' + q : top + '/' + sub;
-  if (key !== lexKey) { lexKey = key; lexPage = 0; }
+  if (key !== lexKey) { lexKey = key; lexPage = 0; if (!q) lexShow = 'all'; } // v0.6.1（Justin 11/17：「改成自動回全部」）：換主題時顯示篩選回「全部」，避免上次選「已讀」看起來像字不見
   const mine = new Map(); for (const w of await dbAll('words')) for (const k of termKeys(w.term)) mine.set(k, w);
   const inBook = it => termKeys(it.w).some(k => mine.has(k));
   const pool = q ? items.filter(it => String(it.w).toLowerCase().includes(q) || String(it.zh).includes(lexQuery.trim()))
