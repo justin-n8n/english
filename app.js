@@ -1,4 +1,4 @@
-/* 阿輝英文日課 v0.4.0（2026-11-17 晚：📚 字庫、❓ 說明放到下方選單）／v0.3.0（2026-11-17；v0.2.2 2026-11-16、v0.2.0／v0.2.1 2026-10-30、v0.1.0 2026-10-27）
+/* 阿輝英文日課 v0.5.0（2026-11-17 晚：字庫依主題學、🧩 片語、☀️ 每日小語、全面 🔊、🎤 跟讀、▶️ 連續播放）／v0.4.0（同日：📚 字庫、❓ 說明放到下方選單）／v0.3.0（2026-11-17；v0.2.2 2026-11-16、v0.2.0／v0.2.1 2026-10-30、v0.1.0 2026-10-27）
    v0.3.0（規劃 43 號 規劃/App改版規劃_20261117_v1.md；Justin 11/17：「全部都要做」「VOA不要了」「現在就開始」）：
    ・12 週從 2026-11-23（一）重新起算、目標 84 天打卡 75 天；一週改從週一開始；可以補記前 3 天。
    ・沒讀的文章、還沒複習過的片語卡，一次順延到 11/23 起（maybeReplan，每個帳號只做一次）；VOA 不再排。
@@ -7,7 +7,7 @@
    資料存在這台的 IndexedDB；填了 Apps Script 網址和密語就跟手機、平板、網頁互相同步（做法照 34.修行紀錄App）。
    ⚠️ 本程式放在公開的 GitHub Pages：程式碼裡不放任何文章、單字或個人資料（wordlist.js 是公開的官方字表，只有字和級別）。 */
 'use strict';
-const VERSION = 'v0.4.0';
+const VERSION = 'v0.5.0';
 const START = '2026-11-23'; // 12 週起算日（v0.3.0 起；Justin 11/17「預計從下星期一開始學習」）
 const GOAL = { days: 84, hit: 75 }; // 規劃書 v2：12 週、打卡 75 天以上
 const CHECKPOINTS = ['2026-12-20', '2027-01-17', '2027-02-14'];
@@ -18,13 +18,13 @@ const LEARNED_DAYS = 21; // 下次複習在 21 天以後＝學會
 const LEVELS = ['A1', 'A1+', 'A2', 'A2+', 'B1', 'B1+', 'B2', 'B2+', 'C1']; // 升一級＝往上兩格，降半級＝往下一格
 const FEEL = { easy: '太簡單', ok: '剛好', hard: '太難' };
 const MIN_ITEMS = [['funday', 'Funday'], ['speak', 'Speak'], ['read', '閱讀'], ['review', '複習']];
-const SOURCES = ['Funday', 'Speak', '日報', '小學生報', '字庫', '閱讀清單', '工作', 'Reader 文章', '影片', '生活', '其他'];
+const SOURCES = ['Funday', 'Speak', '日報', '小學生報', '字庫', '片語庫', '每日小語', '閱讀清單', '工作', 'Reader 文章', '影片', '生活', '其他'];
 const STORES = ['checkins', 'words', 'reads', 'prefs']; // 會同步的四種資料
 // 生字表顏色（小輝排清單時用官方字表比對後標好；規劃書 v2 第三節）
 const WTAGS = { base: ['基本', '國中小基本 1200 字'], hs: ['常用', '大考詞彙表第 1～4 級'], adv: ['進階', '大考詞彙表第 5～6 級'],
   phrase: ['片語', '片語'], key: ['關鍵字', '文章關鍵字（不在兩份字表）'] };
-const KINDS = { icrt: 'ICRT', yang: '楊陽講義', reader: 'Reader', wsj: 'WSJ 挑戰', voa: 'VOA', daily: '日報', kids: '小學生報', lex: '字庫' };
-const EXTRA_KINDS = ['daily', 'kids', 'lex']; // 不在「本週文章」清單裡、不算難度升降（lex＝字庫）
+const KINDS = { icrt: 'ICRT', yang: '楊陽講義', reader: 'Reader', wsj: 'WSJ 挑戰', voa: 'VOA', daily: '日報', kids: '小學生報', lex: '字庫', quote: '每日小語' };
+const EXTRA_KINDS = ['daily', 'kids', 'lex', 'quote']; // 不在「本週文章」清單裡、不算難度升降（lex＝字庫）
 // 單字分類（v0.3.0）：b／1／3／5 對應 wordlist.js；片語、課外是程式判斷的
 const CATS = [
   ['b', '國中小', '教育部國中小基本 1200 字'], ['1', '高中 1～2 級', '大考中心參考詞彙表第 1～2 級'],
@@ -339,6 +339,57 @@ function speak(text) {
   const v = speechSynthesis.getVoices().find(v => /^en[-_]US/i.test(v.lang)); if (v) u.voice = v;
   speechSynthesis.speak(u);
 }
+/* v0.5.0：▶️ 連續播放（一個接一個念）、🎤 跟讀（瀏覽器語音辨識，Android Chrome 可用）。
+   按鈕只要寫 data-tts="英文"（念）或 data-sh="英文"（跟讀），下面的全域處理就會接手。 */
+let seqOn = false;
+function speakSeq(list) {
+  if (!('speechSynthesis' in window)) return toast('這台瀏覽器不支援朗讀');
+  speechSynthesis.cancel(); seqOn = true;
+  const voice = speechSynthesis.getVoices().find(v => /^en[-_]US/i.test(v.lang));
+  let i = 0;
+  const next = () => {
+    if (!seqOn || i >= list.length) { seqOn = false; return; }
+    const u = new SpeechSynthesisUtterance(plain(list[i++])); u.lang = 'en-US'; u.rate = 0.9; if (voice) u.voice = voice;
+    u.onend = () => setTimeout(next, 600); u.onerror = () => { seqOn = false; };
+    speechSynthesis.speak(u);
+  };
+  next();
+  toast(`▶️ 連續播放 ${list.length} 句（再按一次 ⏹ 停止）`);
+}
+function stopSeq() { seqOn = false; if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+const normWords = t => String(t || '').toLowerCase().replace(/[’]/g, "'").replace(/[^a-z' ]/g, ' ').split(/\s+/).filter(Boolean);
+function shadow(text) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition, target = plain(text);
+  openModal(`<h2>🎤 跟讀</h2><p style="font-size:19px">${esc(target)}</p>
+    <div class="row"><button id="sh-say">🔊 先聽</button><button class="primary" id="sh-go" ${SR ? '' : 'disabled'}>🎤 開始唸</button><button id="sh-close">關閉</button></div>
+    <div id="sh-res" class="muted" style="margin-top:10px">${SR ? '先聽一次，按「開始唸」後對著手機唸出來（第一次要允許麥克風）。' : '這台瀏覽器不支援語音辨識：Android 手機、平板的 Chrome 可以用；也可以先聽、自己大聲跟著唸。'}</div>`);
+  $('#sh-say').onclick = () => speak(target);
+  $('#sh-close').onclick = closeModal;
+  if (!SR) return;
+  $('#sh-go').onclick = () => {
+    const r = new SR(); r.lang = 'en-US'; r.interimResults = false; r.maxAlternatives = 1;
+    $('#sh-res').textContent = '🎙️ 聽你唸中…';
+    r.onresult = e => {
+      const said = e.results[0][0].transcript, a = normWords(target), b = new Set(normWords(said));
+      const miss = a.filter(x => !b.has(x)), pct = a.length ? Math.round((a.length - miss.length) / a.length * 100) : 0;
+      $('#sh-res').innerHTML = `你唸的是：<b>${esc(said)}</b><br>相符 <b>${pct}%</b>${pct >= 80 ? '　👍 很棒！' : pct >= 50 ? '　再唸一次會更好' : '　先聽一次再試試'}${miss.length ? `<br>沒對到的字：${esc([...new Set(miss)].join(', '))}` : ''}`;
+      kvGet('shadowCount', 0).then(n => kvSet('shadowCount', n + 1));
+    };
+    r.onerror = e => { $('#sh-res').textContent = `沒聽清楚（${e.error}），再試一次；第一次要允許麥克風。`; };
+    try { r.start(); } catch (err) { $('#sh-res').textContent = '麥克風正在使用中，等一下再按。'; }
+  };
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-tts],[data-sh],[data-seq]');
+  if (!t) return;
+  e.preventDefault(); e.stopPropagation();
+  if (t.dataset.seq != null) { if (seqOn) stopSeq(); else speakSeq(JSON.parse(t.dataset.seq || '[]')); }
+  else if (t.dataset.tts != null) speak(t.dataset.tts);
+  else shadow(t.dataset.sh);
+}, true);
+const sayBtn = t => `<button class="small" data-tts="${esc(plain(t))}" aria-label="念">🔊</button>`;
+const shBtn = t => `<button class="small" data-sh="${esc(plain(t))}" aria-label="跟讀">🎤</button>`;
+const seqBtn = list => `<button class="small" data-seq="${esc(JSON.stringify(list.map(plain).filter(Boolean)))}">▶️ 連續播放／⏹ 停止</button>`;
 
 /* ---------- 里程碑（v0.3.0）：給自己信心 ---------- */
 async function gatherStats() {
@@ -414,6 +465,7 @@ async function renderToday(v) {
   ];
   const nextCp = CHECKPOINTS.find(d => d >= today);
   v.innerHTML = `
+    ${await quoteCard()}
     ${started ? '' : `<div class="card suggest">📅 <b>${md(START)} 正式開始</b>12 週計畫（到 ${md(shiftDay(START, GOAL.days - 1))}）。現在先熟悉 App，打卡會照記，但從 ${md(START)} 才算進 12 週進度。</div>`}
     <div class="card">
       <div class="row"><div class="grow"><div class="muted">${md(today)}</div><div class="big">🔥 ${st.streak} 天</div><div class="muted">連續打卡（最長 ${st.best} 天）</div></div>
@@ -446,6 +498,7 @@ async function renderToday(v) {
     rec.note = $('#note', v).value.trim();
     await save('checkins', rec);
   };
+  bindQuote(v);
   $$('[data-day]', v).forEach(b => b.onclick = () => { editDay = Number(b.dataset.day); renderToday(v); });
   $$('[data-min]', v).forEach(i => i.addEventListener('change', async () => { await store(); renderToday(v); }));
   $('#note', v).addEventListener('change', store);
@@ -466,6 +519,42 @@ async function renderToday(v) {
   };
   $('#live-plus', v).addEventListener('click', () => liveAdd(1));
   $('#live-minus', v).addEventListener('click', () => liveAdd(-1));
+}
+
+
+/* ☀️ 每日小語（v0.5.0）：365 則、一天一則、從 12 週起算日（11/23）開始排，絕不重複；內容是小輝原創，放在你的雲端，經同步進來（kind: quote） */
+async function quoteList() {
+  const best = {};
+  for (const r of (await dbAll('reads')).filter(r => r.kind === 'quote' && Array.isArray(r.quotes))) if (!best[r.pack] || (r.ver || 0) > (best[r.pack].ver || 0)) best[r.pack] = r;
+  const m = new Map(); let src = '';
+  for (const r of Object.values(best)) { src = r.src || src; for (const q of r.quotes) m.set(q.n, q); }
+  return { m, src };
+}
+let quoteOffset = 0; // 0＝今天，往回看幾天
+async function quoteCard() {
+  const { m, src } = await quoteList();
+  if (!m.size) return '';
+  const today = todayKey(), base = Math.max(1, daysBetween(START, today) + 1), n = base - quoteOffset;
+  if (base > m.size && !quoteOffset) return `<div class="card quote"><div class="muted">☀️ 每日小語：${m.size} 則都讀完了，跟小輝說「再寫一年的小語」。</div></div>`;
+  const q = m.get(n); if (!q) return '';
+  const day = shiftDay(START, n - 1), have = new Set((await dbAll('words')).flatMap(w => termKeys(w.term)));
+  return `<div class="card quote" data-sent="${esc(q.en)}">
+    <div class="row"><span class="tag gold">☀️ ${esc(q.theme)}</span><span class="muted">第 ${n} / ${m.size} 則・${md(day)}${today < START ? '（11/23 開始，先預覽）' : ''}</span></div>
+    <p class="q-en">${tapText(q.en)}</p>
+    <div class="row">${sayBtn(q.en)}${shBtn(q.en)}<span class="muted">點字可以加進單字本</span></div>
+    <p>${esc(q.zh)}</p>
+    ${(q.words || []).map((w, i) => `<div class="row"><b>${esc(w.w)}</b> ${sayBtn(w.w)} <span class="grow">${esc(w.zh)}</span>${have.has(String(w.w).toLowerCase()) ? '<span class="tag">已加入</span>' : `<button class="small" data-qw="${i}" data-qn="${n}">＋單字本</button>`}</div>`).join('')}
+    ${q.try ? `<div class="muted" style="margin-top:6px">💡 今天試試：${esc(q.try)}</div>` : ''}
+    <div class="row" style="margin-top:8px;justify-content:space-between">${n > 1 ? '<button class="small" data-qnav="1">◀ 前一則</button>' : '<span></span>'}<span class="muted src">${esc(src)}</span>${quoteOffset ? '<button class="small" data-qnav="-1">下一則 ▶</button>' : '<span></span>'}</div>
+  </div>`;
+}
+function bindQuote(v) {
+  bindTap(v, { source: '每日小語' });
+  $$('[data-qnav]', v).forEach(b => b.onclick = () => { quoteOffset = Math.max(0, quoteOffset + Number(b.dataset.qnav)); renderToday(v); });
+  $$('[data-qw]', v).forEach(b => b.onclick = async () => {
+    const { m } = await quoteList(), q = m.get(Number(b.dataset.qn)), w = q.words[Number(b.dataset.qw)];
+    await addWord({ term: w.w, zh: w.zh, example: q.en, exzh: q.zh, exsrc: '每日小語（AI 原創）', source: '每日小語' }); renderToday(v);
+  });
 }
 
 /* 快速加入 */
@@ -535,8 +624,8 @@ async function renderWords(v) {
       <div class="filters"><button class="small ${!wordCat ? 'sel' : ''}" data-c="">全部分類</button>${CATS.map(([k, n]) => `<button class="small ${wordCat === k ? 'sel' : ''}" data-c="${k}"><span class="ct ct-${k}">${n}</span> ${cc(k)}</button>`).join('')}</div>
       <input id="q" type="search" placeholder="搜尋單字或中文" value="${esc(wordQuery)}">
     </div>
-    <div class="card">${list.length ? `<ul class="list">${list.map(w => `<li class="word-item" data-id="${esc(w.id)}">
-      <div class="grow"><b>${esc(w.term)}</b> ${catTag(w.term, w.wtag)} ${w.pos ? `<span class="muted">${esc(w.pos)}</span>` : ''}<div class="muted">${esc(w.zh || '（待補中文）')}</div></div>
+    <div class="card">${list.length ? `<div class="row" style="margin-bottom:6px">${seqBtn(list.slice(0, 40).flatMap(w => [w.term, w.example || '']))}<span class="muted">前 40 個字和例句</span></div><ul class="list">${list.map(w => `<li class="word-item" data-id="${esc(w.id)}">
+      <div class="grow"><b>${esc(w.term)}</b> ${sayBtn(w.term)} ${catTag(w.term, w.wtag)} ${w.pos ? `<span class="muted">${esc(w.pos)}</span>` : ''}<div class="muted">${esc(w.zh || '（待補中文）')}</div>${w.example ? `<div class="muted">💬 ${esc(w.example)} ${sayBtn(w.example)}${shBtn(w.example)}</div>` : ''}</div>
       ${w.status === 'pending' && !w.zh ? '<span class="tag warn">待處理</span>' : isLearned(w) ? '<span class="tag">🧠 學會</span>' : canReview(w) ? '<span class="tag">到期</span>' : `<span class="muted">${esc(w.srs?.due?.slice(5) || '')}</span>`}</li>`).join('')}</ul>`
       : `<div class="empty">${all.length ? '沒有符合的單字' : '還沒有單字。遇到不會的就按「快速加入」。'}</div>`}</div>`;
   $('#add', v).onclick = () => openQuickAdd();
@@ -592,52 +681,90 @@ async function lexData() {
   return LEXC;
 }
 const LEX_CATS = [['b', '國中小'], ['1', '高中 1～2 級'], ['3', '高中 3～4 級'], ['5', '高中 5～6 級']];
+const LV_ORDER = { b: 0, 1: 1, 3: 2, 5: 3, ph: 4 };
+// 主題（v0.5.0，Justin 11/17「照規劃做」）：大主題 → 子主題；每個字由 AI 分到一個子主題（來源標「主題：AI 分類」）
+const TOPICS = [
+  ['P', '👨‍👩‍👧 人與家庭', [['P1', '家人親戚'], ['P2', '身體外表'], ['P3', '個性情緒'], ['P4', '人生階段']]],
+  ['D', '🏠 日常生活', [['D1', '居家用品'], ['D2', '衣著打扮'], ['D3', '作息家事'], ['D4', '購物金錢']]],
+  ['F', '🍜 飲食', [['F1', '食物'], ['F2', '飲料'], ['F3', '蔬菜水果'], ['F4', '餐廳烹飪']]],
+  ['S', '🏫 學校與學習', [['S1', '學校科目'], ['S2', '文具用品'], ['S3', '考試學習'], ['S4', '知識學問']]],
+  ['W', '💼 工作與職場', [['W1', '職業'], ['W2', '辦公室'], ['W3', '商業財經'], ['W4', '法律規範']]],
+  ['T', '🚆 交通與旅遊', [['T1', '交通工具'], ['T2', '地點方向'], ['T3', '旅行住宿'], ['T4', '城市建築']]],
+  ['L', '⚽ 休閒娛樂', [['L1', '運動'], ['L2', '音樂藝術'], ['L3', '嗜好遊戲'], ['L4', '節日慶祝']]],
+  ['N', '🌳 自然與環境', [['N1', '動物'], ['N2', '植物'], ['N3', '天氣季節'], ['N4', '地理環境']]],
+  ['H', '💻 科技與健康', [['H1', '電腦網路'], ['H2', '科學研究'], ['H3', '醫療健康']]],
+  ['C', '🌏 社會與文化', [['C1', '政府國家'], ['C2', '新聞媒體'], ['C3', '文化、宗教與多元'], ['C4', '歷史']]],
+  ['M', '💬 溝通與思考', [['M1', '說話溝通'], ['M2', '想法意見'], ['M3', '感覺態度']]],
+  ['Q', '⏰ 時間與數量', [['Q1', '時間日期'], ['Q2', '數字數量'], ['Q3', '顏色形狀']]],
+  ['B', '🧩 基礎字與抽象', [['B1', '常用動作'], ['B2', '程度變化'], ['B3', '功能字']]],
+  ['X', '🗨️ 片語', []], // 片語庫：子主題＝「生活・日常」這種，從資料來
+];
+const SUB_NAME = Object.fromEntries(TOPICS.flatMap(([, , subs]) => subs));
+const topOf = it => it.cat === 'ph' ? 'X' : String(it.t || '').slice(0, 1) || 'B';
+const subOf = it => it.cat === 'ph' ? `${it.g || ''}・${it.tp || ''}` : (it.t || '');
+const subName = it => it.cat === 'ph' ? subOf(it) : (SUB_NAME[it.t] || '未分類');
 const LEX_PAGE = 30;
 const lexSay = w => String(w || '').replace(/\(.*?\)/g, '').replace(/\//g, ', ');
 function lexSrcLines(it, srcs) {
   const s = it.s || {}, g = k => esc(srcs[k] || k || '');
-  return [['單字', g(s.w)], ['詞性', g(s.pos)], ...(it.hs ? [['大考級別', g('ceec')]] : []), ['中文、音標、例句與翻譯', g('ai')], ['發音', g('tts')]]
-    .map(([k, t]) => `<div><b>${k}</b>：${t}</div>`).join('');
+  const rows = it.cat === 'ph'
+    ? [['片語、中文、英文解釋、主題', g('phlib')], ['例句', g(s.ex || 'ai')], ['例句中文、音標', g('ai')]]
+    : [['單字', g(s.w)], ['詞性', g(s.pos)], ...(it.hs ? [['大考級別', g('ceec')]] : []), ['中文、音標、例句與翻譯', g('ai')], ['主題', g(it.t ? 'aitopic' : '')]];
+  return [...rows, ['發音', g('tts')]].map(([k, t]) => `<div><b>${k}</b>：${t}</div>`).join('');
 }
-let lexCat = 'b', lexShow = 'all', lexQuery = '', lexPage = 0;
+let lexTop = 'P', lexSub = '', lexLv = '', lexShow = 'all', lexQuery = '', lexPage = 0;
 async function renderLex(v, head) {
   const { items, srcs } = await lexData();
   const mine = new Map(); for (const w of await dbAll('words')) for (const k of termKeys(w.term)) mine.set(k, w);
   const st = it => { const w = termKeys(it.w).map(k => mine.get(k)).find(Boolean); return !w ? 'new' : isLearned(w) ? 'learned' : 'in'; };
   if (!items.length) {
-    v.innerHTML = `${head}<div class="card empty">字庫還沒同步進來。小輝把字庫放進交換資料夾後，到「⚙️ 設定」按「立刻同步」就會出現（約 6,000 個字，第一次比較久）。</div>`;
+    v.innerHTML = `${head}<div class="card empty">字庫還沒同步進來。小輝把字庫放進交換資料夾後，到「⚙️ 設定」按「立刻同步」就會出現（約 6,400 筆，第一次比較久）。</div>`;
     return;
   }
-  const inCat = items.filter(it => it.cat === lexCat), q = lexQuery.trim().toLowerCase();
-  const list = inCat.filter(it => (lexShow === 'all' || st(it) === lexShow) && (!q || String(it.w).toLowerCase().includes(q) || String(it.zh).includes(lexQuery.trim())));
+  const q = lexQuery.trim().toLowerCase();
+  const inTop = items.filter(it => topOf(it) === lexTop);
+  const subs = lexTop === 'X' ? [...new Set(inTop.map(subOf))].sort().map(k => [k, k]) : (TOPICS.find(t => t[0] === lexTop) || ['', '', []])[2];
+  const pool = q ? items.filter(it => String(it.w).toLowerCase().includes(q) || String(it.zh).includes(lexQuery.trim()))
+    : inTop.filter(it => !lexSub || subOf(it) === lexSub);
+  const list = pool.filter(it => (!lexLv || it.cat === lexLv || it.cat === 'ph') && (lexShow === 'all' || st(it) === lexShow)) // 片語沒有程度，不受程度篩選影響
+    .sort((a, b) => (LV_ORDER[a.cat] ?? 9) - (LV_ORDER[b.cat] ?? 9));
   const pages = Math.max(1, Math.ceil(list.length / LEX_PAGE)); if (lexPage >= pages) lexPage = pages - 1;
   const page = list.slice(lexPage * LEX_PAGE, (lexPage + 1) * LEX_PAGE);
-  const cnt = k => inCat.filter(it => st(it) === k).length;
+  const cnt = k => pool.filter(it => (!lexLv || it.cat === lexLv || it.cat === 'ph') && st(it) === k).length;
   const nav = `<div class="row" style="justify-content:space-between;margin:6px 0"><button class="small" data-pg="-1" ${lexPage ? '' : 'disabled'}>← 上一頁</button><span class="muted">第 ${lexPage + 1} / ${pages} 頁（${list.length} 個）</span><button class="small" data-pg="1" ${lexPage < pages - 1 ? '' : 'disabled'}>下一頁 →</button></div>`;
   v.innerHTML = `${head}
-    <div class="card"><h2 style="margin:0">📚 字庫</h2>
-      <div class="muted">官方字表的每個字：中文、音標、🔊 發音、例句。想學的按「＋單字本」才會進複習。每個字的「來源」可以展開看。</div>
-      <div class="filters">${LEX_CATS.map(([k, n]) => `<button class="small ${lexCat === k ? 'sel' : ''}" data-lc="${k}"><span class="ct ct-${k}">${n}</span> ${items.filter(it => it.cat === k).length}</button>`).join('')}</div>
+    <div class="card"><h2 style="margin:0">📚 字庫：依主題學</h2>
+      <div class="muted">先選大主題、再選子主題；每個子主題從國中小排到高中 5～6 級。每個字和例句都能 🔊 聽、🎤 跟讀，「來源」可以展開看。</div>
+      <div class="filters topics">${TOPICS.map(([k, n]) => `<button class="small ${!q && lexTop === k ? 'sel' : ''}" data-lt="${k}">${n} <span class="muted">${items.filter(it => topOf(it) === k).length}</span></button>`).join('')}</div>
+      ${q ? `<div class="muted">搜尋「${esc(lexQuery.trim())}」：在全部主題裡找</div>` : `<div class="filters"><button class="small ${!lexSub ? 'sel' : ''}" data-lsub="">全部</button>${subs.map(([k, n]) => `<button class="small ${lexSub === k ? 'sel' : ''}" data-lsub="${esc(k)}">${esc(n)} <span class="muted">${inTop.filter(it => subOf(it) === k).length}</span></button>`).join('')}</div>`}
+      ${lexTop === 'X' && !q ? '' : `<div class="filters"><button class="small ${!lexLv ? 'sel' : ''}" data-llv="">所有程度</button>${LEX_CATS.map(([k, n]) => `<button class="small ${lexLv === k ? 'sel' : ''}" data-llv="${k}"><span class="ct ct-${k}">${n}</span></button>`).join('')}</div>`}
       <div class="filters">${[['all', '全部'], ['new', '還沒加'], ['in', '在單字本'], ['learned', '🧠 學會']].map(([k, n]) => `<button class="small ${lexShow === k ? 'sel' : ''}" data-ls="${k}">${n}${k === 'all' ? '' : ' ' + cnt(k)}</button>`).join('')}</div>
-      <input id="lq" type="search" placeholder="搜尋英文或中文" value="${esc(lexQuery)}">
+      <input id="lq" type="search" placeholder="搜尋英文或中文（全部主題）" value="${esc(lexQuery)}">
       <div class="muted" style="margin-top:6px">想聽真人發音：<a href="https://www.geptkids.org.tw/Home/wordlist" target="_blank" rel="noopener">GEPT Kids 字表 ↗</a>（675 字）或每個字的「字典 ↗」。</div>
     </div>
-    <div class="card">${nav}<ul class="list lexlist">${page.map(it => { const s = st(it), i = items.indexOf(it); return `<li><div class="grow">
-      <div><b class="lw">${esc(it.w)}</b> <span class="muted">${esc(it.pos || '')}</span> <button class="small" data-say="${esc(lexSay(it.w))}">🔊</button> <span class="muted">${esc(it.ipa || '')}</span>${it.hs ? ` <span class="tag">大考 ${esc(it.hs)} 級</span>` : ''}</div>
-      <div>${esc(it.zh)}</div>
-      <div class="lex-ex">💬 ${esc(it.ex)} <button class="small" data-say="${esc(it.ex)}">🔊</button></div>
-      <div class="muted">${esc(it.exzh)}</div>
-      <details class="src"><summary>來源</summary>${lexSrcLines(it, srcs)}<div><a href="${esc(dictUrl(lexSay(it.w).split(',')[0]))}" target="_blank" rel="noopener">Cambridge 字典 ↗</a></div></details></div>
+    <div class="card">${nav}<div class="row">${seqBtn(page.flatMap(it => [lexSay(it.w), it.ex]))}<span class="muted">這一頁的字和例句</span></div>
+    <ul class="list lexlist">${page.map(it => { const s = st(it), i = items.indexOf(it); return `<li><div class="grow">
+      <div><b class="lw">${esc(it.w)}</b> <span class="muted">${esc(it.pos || '')}</span> ${sayBtn(lexSay(it.w))} <span class="muted">${esc(it.ipa || '')}</span>
+        ${it.cat === 'ph' ? '<span class="ct ct-phrase">片語</span>' : `<span class="ct ct-${esc(it.cat)}">${esc(CAT_NAME[it.cat] || '')}</span>`}${q || !lexSub ? ` <span class="tag gold">${esc(subName(it))}</span>` : ''}</div>
+      <div>${esc(it.zh)}</div>${it.en ? `<div class="muted">${esc(it.en)}</div>` : ''}
+      <div class="lex-ex">💬 ${esc(it.ex)} ${sayBtn(it.ex)}${shBtn(it.ex)}</div>
+      <div class="muted">${esc(it.exzh || '')}</div>
+      <details class="src"><summary>來源</summary>${lexSrcLines(it, srcs)}<div><a href="${esc(safeUrl(it.dict || dictUrl(lexSay(it.w).split(',')[0])))}" target="_blank" rel="noopener">${it.dict ? '查證字典' : 'Cambridge 字典'} ↗</a></div></details></div>
       <div>${s === 'new' ? `<button class="small primary" data-lx="${i}">＋單字本</button>` : s === 'learned' ? '<span class="tag">🧠 學會</span>' : '<span class="tag">已在單字本</span>'}</div></li>`; }).join('')}</ul>${nav}</div>`;
-  $$('[data-lc]', v).forEach(b => b.onclick = () => { lexCat = b.dataset.lc; lexPage = 0; renderWords(v); });
+  $$('[data-lt]', v).forEach(b => b.onclick = () => { lexTop = b.dataset.lt; lexSub = ''; lexQuery = ''; lexPage = 0; renderWords(v); });
+  $$('[data-lsub]', v).forEach(b => b.onclick = () => { lexSub = b.dataset.lsub; lexPage = 0; renderWords(v); });
+  $$('[data-llv]', v).forEach(b => b.onclick = () => { lexLv = b.dataset.llv; lexPage = 0; renderWords(v); });
   $$('[data-ls]', v).forEach(b => b.onclick = () => { lexShow = b.dataset.ls; lexPage = 0; renderWords(v); });
   $$('[data-pg]', v).forEach(b => b.onclick = () => { lexPage += Number(b.dataset.pg); renderWords(v); window.scrollTo(0, 0); });
-  $$('[data-say]', v).forEach(b => b.onclick = () => speak(b.dataset.say));
   $('#lq', v).addEventListener('input', e => { lexQuery = e.target.value; lexPage = 0; clearTimeout(renderLex.t); renderLex.t = setTimeout(async () => { await renderWords(v); const i = $('#lq', v); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 300); });
   $$('[data-lx]', v).forEach(b => b.onclick = async () => {
     const it = items[Number(b.dataset.lx)], s = it.s || {};
-    const src = `單字：${srcs[s.w] || ''}；詞性：${srcs[s.pos] || ''}${it.hs ? `；大考級別（${it.hs} 級）：${srcs.ceec || ''}` : ''}；中文、音標、例句：${srcs.ai || ''}`;
-    await addWord({ term: it.w, pos: it.pos || '', zh: it.zh, ipa: it.ipa || '', example: it.ex, exzh: it.exzh || '', exsrc: 'AI 例句（字庫）', source: '字庫：' + CAT_NAME[it.cat], lexsrc: src });
+    if (it.cat === 'ph') {
+      await addWord({ term: it.w, pos: it.pos || '', zh: it.zh, en: it.en || '', ipa: it.ipa || '', example: it.ex, exzh: it.exzh || '', exsrc: 'AI 例句（片語庫）', dict: it.dict || '', wtag: 'phrase', source: '片語庫：' + subOf(it), lexsrc: `片語：${srcs.phlib || ''}；例句中文、音標：${srcs.ai || ''}` });
+    } else {
+      const src = `單字：${srcs[s.w] || ''}；詞性：${srcs[s.pos] || ''}${it.hs ? `；大考級別（${it.hs} 級）：${srcs.ceec || ''}` : ''}；中文、音標、例句：${srcs.ai || ''}；主題（${subName(it)}）：${srcs.aitopic || ''}`;
+      await addWord({ term: it.w, pos: it.pos || '', zh: it.zh, ipa: it.ipa || '', example: it.ex, exzh: it.exzh || '', exsrc: 'AI 例句（字庫）', source: '字庫：' + subName(it), lexsrc: src });
+    }
     renderWords(v);
   });
 }
@@ -667,7 +794,7 @@ async function renderReview(v) {
       ${session.show ? `<div class="ans">
         <div><b>${esc(w.zh || '（還沒有中文）')}</b> ${w.pos ? `<span class="muted">${esc(w.pos)}</span>` : ''} ${w.ipa ? `<span class="muted">${esc(w.ipa)}</span>` : ''}</div>
         ${w.en ? `<div class="muted">${esc(w.en)}</div>` : ''}
-        ${w.example ? `<p>💬 ${esc(w.example)} <button class="small" id="sayEx">🔊</button>${w.exzh ? `<br><span class="muted">${esc(w.exzh)}</span>` : ''}</p>` : ''}
+        ${w.example ? `<p>💬 ${esc(w.example)} <button class="small" id="sayEx">🔊</button>${shBtn(w.example)}${w.exzh ? `<br><span class="muted">${esc(w.exzh)}</span>` : ''}</p>` : ''}
         ${w.mine ? `<p>✍️ ${esc(w.mine)}</p>` : ''}
         ${w.sentence ? `<p class="muted">原文：${esc(w.sentence)}（${esc(w.source || '')}）</p>` : ''}
       </div>
@@ -827,8 +954,8 @@ async function renderDaily(v, head) {
       <div class="row"><span class="tag">${esc(d.level || 'A2')}</span><span class="tag gold">${esc(d.emoji || '')} ${esc(d.topic || '')}</span><span class="muted">${md(r.date)}</span>${r.done ? `<span class="tag">✓ 讀完${r.score != null ? `・答對 ${r.score} 題` : ''}</span>` : ''}</div>
       <div class="title" style="margin-top:8px">${esc(d.title_en)}</div>
       <div class="muted">${esc(d.title_zh)}</div>
-      <h2 style="margin-top:14px">① 新聞 <button class="small" id="zh">${showZh ? '隱藏中文' : '顯示中文'}</button> <button class="small" id="sayAll">🔊 全部</button></h2>
-      <ol class="sent">${(d.sentences || []).map(s => `<li data-sent="${esc(plain(s.en))}"><div>${tapText(s.en)} <button class="small" data-say="${esc(plain(s.en))}">🔊</button></div>${showZh ? `<div class="muted">${marks(s.zh)}</div>` : ''}</li>`).join('')}</ol>
+      <h2 style="margin-top:14px">① 新聞 ${seqBtn((d.sentences || []).map(s => s.en))} <button class="small" id="zh">${showZh ? '隱藏中文' : '顯示中文'}</button> <button class="small" id="sayAll">🔊 全部</button></h2>
+      <ol class="sent">${(d.sentences || []).map(s => `<li data-sent="${esc(plain(s.en))}"><div>${tapText(s.en)} <button class="small" data-say="${esc(plain(s.en))}">🔊</button>${shBtn(s.en)}</div>${showZh ? `<div class="muted">${marks(s.zh)}</div>` : ''}</li>`).join('')}</ol>
       <div class="muted">💡 點句子裡任何一個字，可以聽發音、查字典、加進單字本。</div>
       <h2 style="margin-top:14px">② 單字</h2>
       <ul class="preview">${(d.words || []).map((w, i) => `<li><div class="grow"><b>${esc(w.w)}</b> ${catTag(w.w)} <button class="small" data-say="${esc(w.w)}">🔊</button> <span class="muted">${esc(w.pos || '')}</span> ${esc(w.zh)}<div class="muted">${marks(w.ex || '')}</div></div>
@@ -1058,6 +1185,7 @@ async function renderSettings(v) {
 }
 /* 說明（精簡版）：只寫做法，不放網址、密語或個人資料（這個檔是公開的） */
 const HELP_USE = [
+  ['☀️ 每日小語', `<p>「今天」最上面是每天一則的勵志英文小語（勇氣、愛、努力、堅持、感恩、希望……輪著來），共 365 則、一天一則從 11/23 開始，不會重複。可以 🔊 聽、🎤 跟讀、點字加單字本，「◀ 前一則」看以前的。全部是小輝原創。</p>`],
   ['☀️ 每天 40 分鐘：照「今天三步」做', `<ol>
     <li><b>① Speak 10 分鐘</b>（通勤用手機）：練完回「☀️ 今天」在 Speak 按 +10。</li>
     <li><b>② 閱讀 20 分鐘</b>（晚上用平板）：「📖 閱讀」讀本週文章（讀完自動 +20），或「📰 日報」「🧒 小學生報」（讀完各自動 +10）。</li>
@@ -1072,7 +1200,8 @@ const HELP_USE = [
     <li><b>📚 資源</b>：Funday、Speak、ICRT、Reader、字典，以及 GEPT Kids 字表、Cool English、均一、1200 字檢核表的入口（只放連結），還可以加你自己的連結；讀完按「+10 分」。</li>
   </ul>`],
   ['📒 單字本、分類與 🔁 複習', `<ul>
-    <li>「📒 單字本」上面有兩頁：<b>我的單字本</b>（你加的字和片語，會進複習）、<b>📚 字庫</b>（國中小 1200 字＋高中 1～6 級，每個字有中文、音標、🔊、例句和來源；想學的按「＋單字本」）。</li>
+    <li>「📒 單字本」上面有兩頁：<b>我的單字本</b>（你加的字和片語，會進複習）、<b>📚 字庫</b>（國中小 1200 字＋高中 1～6 級＋片語庫 300 個，<b>依主題學</b>：先選大主題如「💼 工作與職場」、再選子主題，從簡單排到難；每個字和例句都能 🔊 聽、🎤 跟讀，有來源；想學的按「＋單字本」）。</li>
+    <li><b>▶️ 連續播放</b>：單字本、字庫、日報都有，一個接一個念，用耳朵複習；再按一次停止。<b>🎤 跟讀</b>：聽完自己唸，App 用語音辨識算相符幾 %（Android 的 Chrome 可以用）。</li>
     <li>每個字自動標分類：<span class="ct ct-b">國中小</span><span class="ct ct-1">高中 1～2 級</span><span class="ct ct-3">高中 3～4 級</span><span class="ct ct-5">高中 5～6 級</span><span class="ct ct-phrase">片語</span><span class="ct ct-other">課外</span>，單字本可以照分類篩選。</li>
     <li>快速加入：只寫單字也可以；沒寫中文的標「待處理」，小輝週日補。有寫中文的今天就能複習。</li>
     <li>複習：先想意思再按「看答案」，按 <b>忘了／模糊／記得／很熟</b>。下次複習排到 21 天以後的字就算「🧠 學會」。</li>
@@ -1102,6 +1231,7 @@ const HELP_MAINT = [
     <li><b>內容</b>：小輝在電腦的交換資料夾放匯入檔（文章、日報、小學生報、字庫、單字），Apps Script 同步時讀進來；只會補空的欄位，不會蓋掉你寫的紀錄。</li>
     <li><b>小學生報有新圖</b>：週日 20:07 排程會自動送一次；想馬上看跟小輝說「加小學生閱讀報」。</li>
     <li><b>字庫有字要更正</b>：跟小輝說哪個字、怎麼改，小輝改好說「更新字庫」送新版本。</li>
+    <li><b>每日小語</b>：365 則放在你的雲端，小輝用工具送進來；要改某一則或 365 則讀完要再寫，跟小輝說。</li>
   </ul>`],
 ];
 /* 詳細版（使用／加文章／維護）在 help.js 的 HELP_DOCS，由 43 號 程式/工具/產生說明網頁.py 從 文件說明/ 的 .md 產生，不要手改 help.js */

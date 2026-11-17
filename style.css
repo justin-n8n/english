@@ -158,3 +158,8 @@ i.a, .dot.a { background: var(--accent); } i.l, .dot.l { background: var(--gold)
 details.src { margin-top: 4px; font-size: 13px; color: var(--muted); }
 details.src div { margin: 2px 0; }
 .tabs a { font-size: 12px; }
+/* v0.5.0：每日小語、主題 */
+.quote { border-color: var(--gold); }
+.q-en { font-size: 20px; line-height: 1.6; margin: 10px 0 6px; font-weight: 600; }
+.topics button { margin-bottom: 2px; }
+.word-item .muted button { vertical-align: middle; }
