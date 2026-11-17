@@ -1,4 +1,4 @@
-/* 阿輝英文日課 v0.6.1（11/17 20:54：字庫每次進學習頁，顯示篩選自動回「全部」）。v0.6.0（2026-11-17 晚：字庫選完進學習頁＋每個字已讀／還沒讀、📅 進度月曆、單字「已讀」進度、日報與舊週從 11/23 往後排、💬 60 則名言（附出處）、✍️ 我的小語；規劃 43 號 規劃/改版規劃_20261117_v1.md）
+/* 阿輝英文日課 v0.7.0（11/17 23:50：「☀️ 今天」最上面加「🎯 我的大方向」每週目標卡：Funday 3～4 堂（一堂 50 分鐘）、閱讀 3～4 篇、口語；規劃書 v3）。v0.6.1（11/17 20:54：字庫每次進學習頁，顯示篩選自動回「全部」）。v0.6.0（2026-11-17 晚：字庫選完進學習頁＋每個字已讀／還沒讀、📅 進度月曆、單字「已讀」進度、日報與舊週從 11/23 往後排、💬 60 則名言（附出處）、✍️ 我的小語；規劃 43 號 規劃/改版規劃_20261117_v1.md）
    v0.5.0（2026-11-17 晚：字庫依主題學、🧩 片語、☀️ 每日小語、全面 🔊、🎤 跟讀、▶️ 連續播放）／v0.4.0（同日：📚 字庫、❓ 說明放到下方選單）／v0.3.0（2026-11-17；v0.2.2 2026-11-16、v0.2.0／v0.2.1 2026-10-30、v0.1.0 2026-10-27）
    v0.3.0（規劃 43 號 規劃/App改版規劃_20261117_v1.md；Justin 11/17：「全部都要做」「VOA不要了」「現在就開始」）：
    ・12 週從 2026-11-23（一）重新起算、目標 84 天打卡 75 天；一週改從週一開始；可以補記前 3 天。
@@ -8,12 +8,12 @@
    資料存在這台的 IndexedDB；填了 Apps Script 網址和密語就跟手機、平板、網頁互相同步（做法照 34.修行紀錄App）。
    ⚠️ 本程式放在公開的 GitHub Pages：程式碼裡不放任何文章、單字或個人資料（wordlist.js 是公開的官方字表，只有字和級別）。 */
 'use strict';
-const VERSION = 'v0.6.1';
+const VERSION = 'v0.7.0';
 const START = '2026-11-23'; // 12 週起算日（v0.3.0 起；Justin 11/17「預計從下星期一開始學習」）
 const GOAL = { days: 84, hit: 75 }; // 規劃書 v2：12 週、打卡 75 天以上
 const CHECKPOINTS = ['2026-12-20', '2027-01-17', '2027-02-14'];
 const DAILY = 40; // 每天目標分鐘（規劃書 v2 第二節）
-const LIVE_GOAL = 3; // Funday 真人課每週至少幾堂（另外算，不進每天分鐘數）
+const LIVE_GOAL = 3; // Funday 真人課每週至少幾堂（另外算，不進每天分鐘數；v0.7.0 規劃書 v3：每週 3～4 堂、一堂 50 分鐘）
 const BACKFILL = 3; // 可以補記前幾天
 const LEARNED_DAYS = 21; // 下次複習在 21 天以後＝學會
 const LEVELS = ['A1', 'A1+', 'A2', 'A2+', 'B1', 'B1+', 'B2', 'B2+', 'C1']; // 升一級＝往上兩格，降半級＝往下一格
@@ -232,6 +232,28 @@ async function maybeReplan() {
   await setPref(REPLAN_KEY, { at: nowIso(), moved, skipped, cards });
   toast(`📅 已改成 ${md(START)} 開始：文章 ${moved} 篇順延、VOA ${skipped} 篇不排、片語 ${cards} 張重排`, 5000);
   return true;
+}
+
+/* ---------- 🎯 我的大方向（v0.7.0，規劃書 v3；Justin 11/17：「只要給我目標，我自已先試著努力」） ---------- */
+const WEEK_GOALS = { liveMin: 3, liveTop: 4, classMin: 50, readMin: 3, readTop: 4, readFloor: 2 };
+const isoDay = iso => { const d = new Date(iso); return isNaN(d) ? '' : todayKey(d); };
+async function goalCard() {
+  const from = weekStart(), to = shiftDay(from, 6), inWk = k => k && k >= from && k <= to;
+  const ck = (await dbAll('checkins')).filter(c => inWk(c.id));
+  const live = ck.reduce((n, c) => n + (Number(c.live) || 0), 0), speak = ck.reduce((n, c) => n + (Number(c.speak) || 0), 0);
+  const read = (await dbAll('reads')).filter(r => r.done && !r.skip && !['lex', 'quote', 'mine'].includes(r.kind) && inWk(isoDay(r.doneAt))).length;
+  const G = WEEK_GOALS, mark = (n, a, b) => n >= b ? ' 🎉' : n >= a ? ' ✅' : '';
+  const row = (icon, name, val, goal, note) => `<div class="step ${note ? '' : ''}"><span class="chk">${icon}</span><div class="grow"><b>${name}</b>：本週 <b>${val}</b>・目標 ${goal}<div class="muted">${note}</div></div></div>`;
+  return `<div class="card"><h2>🎯 我的大方向 <span class="muted" style="font-weight:normal">（${md(from)}～${md(to)}，哪天做自己排）</span></h2>
+    ${row('🎧', 'Funday 真人課', `${live} 堂${mark(live, G.liveMin, G.liveTop)}`, `${G.liveMin}～${G.liveTop} 堂`, `一堂 ${G.classMin} 分鐘；上完在下面按「＋1 堂」・1 對 1 每月 1 次，建議練一個工作主題`)}
+    ${row('📖', '大量閱讀', `${read} 篇${mark(read, G.readMin, G.readTop)}`, `${G.readMin}～${G.readTop} 篇`, `讀得懂為主；本週文章、日報、小學生報讀完都算（字庫、小語不算）・第一個月底線 ${G.readFloor} 篇`)}
+    ${row('🗣️', '口語', `Speak ${speak} 分`, '上課開口＋有空練 Speak', '每堂課至少開口 3 次；說得最好的一句記在「一句話」')}
+    <details style="margin-top:6px"><summary>四個大方向</summary><ol>
+      <li><b>穩定比多重要</b>：寧可每週穩穩 3 堂，也不要這週 6 堂、下週 0 堂。</li>
+      <li><b>沒達標不用補、不用自責</b>：下週照常就好（接受它、放下它）。</li>
+      <li><b>剛恢復先選簡單一點的課</b>：先找回聽得懂、講得出來的感覺，再往上調。</li>
+      <li><b>一週回頭看一次</b>：週日說「處理英文」，跟小輝講三個數字：上了幾堂、讀了幾篇、最卡的是什麼。</li>
+    </ol></details></div>`;
 }
 
 /* ---------- 打卡與連續天數 ---------- */
@@ -471,6 +493,7 @@ async function renderToday(v) {
   ];
   const nextCp = CHECKPOINTS.find(d => d >= today);
   v.innerHTML = `
+    ${await goalCard()}
     ${await quoteCard()}
     ${await mineCard()}
     ${started ? '' : `<div class="card suggest">📅 <b>${md(START)} 正式開始</b>12 週計畫（到 ${md(shiftDay(START, GOAL.days - 1))}）。現在先熟悉 App，打卡會照記，但從 ${md(START)} 才算進 12 週進度。</div>`}
@@ -495,7 +518,7 @@ async function renderToday(v) {
       <div class="muted" style="margin-top:6px">讀完文章、日報、小學生報、做完複習會自動加分鐘；數字一改就存好了。</div>
     </div>
     <div class="card"><h2>Funday 真人會話課 <span class="muted" style="font-weight:normal">（另外算）</span></h2>
-      <div class="row"><div class="grow">本週（週一起）已上 <b>${live}</b> / ${LIVE_GOAL} 堂${live >= LIVE_GOAL ? ' ✅' : ''}<div class="muted">${editDay ? md(k) : '今天'} ${Number(c.live) || 0} 堂・目標每週 3～5 堂、每堂 40 分鐘</div></div>
+      <div class="row"><div class="grow">本週（週一起）已上 <b>${live}</b> / ${LIVE_GOAL} 堂${live >= LIVE_GOAL ? ' ✅' : ''}<div class="muted">${editDay ? md(k) : '今天'} ${Number(c.live) || 0} 堂・目標每週 3～4 堂、一堂 50 分鐘，哪天上都可以</div></div>
         <button class="small" id="live-minus">－1</button><button class="primary small" id="live-plus">＋1 堂</button></div>
     </div>
     <div class="card"><div class="row"><div class="grow">✍️ 遇到新單字？</div><button id="quickAdd">快速加入</button><a class="btn" href="#stats">📈 看進度</a></div></div>`;
@@ -1442,6 +1465,18 @@ async function renderSettings(v) {
 }
 /* 說明（精簡版）：只寫做法，不放網址、密語或個人資料（這個檔是公開的） */
 const HELP_USE = [
+  ['🆕 v0.7.0：🎯 我的大方向', `<ul>
+    <li>「☀️ 今天」最上面的卡片寫三個<b>每週目標</b>和本週進度：🎧 Funday 3～4 堂（一堂 50 分鐘）、📖 閱讀 3～4 篇、🗣️ 口語（上課開口＋Speak）。<b>哪天做自己排</b>，一週從週一算。</li>
+    <li>到最低目標打 ✅，到上限顯示 🎉；展開「四個大方向」看原則：穩定比多重要、沒達標不用補、剛恢復選簡單的課、一週回頭看一次。</li>
+    <li>每天 40 分鐘的「今天三步」還在，當成有空時的做法；上 Funday 的那天不用再做。</li>
+  </ul>`],
+  ['🎧 Funday 上完課', `<ul>
+    <li>上完在「今天」按「＋1 堂」。1 對 1 每月 1 次，建議當「月考」練一個工作主題。</li>
+    <li>講義放 43 號 <b>Funday上課/01.講義/年-月/</b>；錄影、錄音放筆電桌面 <b>Funday上課錄影_不同步/年-月/</b>（檔案大、有同學，不同步雲端）。</li>
+    <li>檔名：<b>日期_時間_課型_主題</b>，例 20261125_2000_小班_Ordering-Food.pdf；懶得改名就丟進對的月份資料夾。</li>
+    <li>跟小輝說「<b>分析 Funday 課</b>」：小輝寫課後分析（重點、新字句、你說得好的一句、可以更好的說法、下堂練習重點）。</li>
+    <li>合約到 2027-11-29；2027-08-29～11-29 要向 Funday 申請延長 18 個月。</li>
+  </ul>`],
   ['🆕 v0.6.0 新功能', `<ul>
     <li><b>📚 字庫</b>：先點大主題、再點子主題，就進到學習頁（一頁 10 個字，上面有「🏠 字庫」「← 大主題」回去）。每個字前面 <b>⭕＝還沒讀、✅＝讀過</b>，點一下切換；按 🔊／🎤 也算讀過；頁尾「✅ 這頁都讀了」。</li>
     <li><b>✍️ 我的小語</b>：「今天」每日小語下面，按「＋ 寫一則」記下書裡打動你的英文句子（書名、頁數、主題），目標一天 3 則；按儲存就同步，別台按「立刻同步」就看到。全部在「📒 單字本 → ✍️ 我的小語本」。</li>
@@ -1455,7 +1490,7 @@ const HELP_USE = [
     <li><b>① Speak 10 分鐘</b>（通勤用手機）：練完回「☀️ 今天」在 Speak 按 +10。</li>
     <li><b>② 閱讀 20 分鐘</b>（晚上用平板）：「📖 閱讀」讀本週文章（讀完自動 +20），或「📰 日報」「🧒 小學生報」（讀完各自動 +10）。</li>
     <li><b>③ 複習 10 分鐘</b>：「🔁 複習」把到期的卡做完（自動加分鐘）。</li>
-    <li><b>Funday 真人會話課</b>每週 3～5 堂、另外算：上完在「今天」按「＋1 堂」（一週從週一算）。</li>
+    <li><b>Funday 真人會話課</b>每週 3～4 堂（一堂 50 分鐘、哪天上都可以）、另外算：上完在「今天」按「＋1 堂」（一週從週一算）。</li>
     <li>忘了記？「記分鐘」上面可以選前 3 天補記，連續天數會接回來。</li>
   </ol><p class="muted">12 週從 11/23（一）起算，目標 84 天打卡 75 天。忙的時候做一點也算打卡。</p>`],
   ['📖 閱讀的四頁', `<ul>
