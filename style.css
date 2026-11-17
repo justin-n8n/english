@@ -151,3 +151,10 @@ i.a, .dot.a { background: var(--accent); } i.l, .dot.l { background: var(--gold)
 .ms .m.ok { border-style: solid; border-color: var(--gold); color: var(--ink); filter: none; opacity: 1; background: var(--soft); }
 .ms .m span { margin-right: 4px; }
 .stats div { font-size: 13px; }
+/* v0.4.0：字庫 */
+.lexlist li { display: flex; gap: 10px; align-items: flex-start; }
+.lexlist .lw { font-size: 19px; }
+.lex-ex { margin-top: 4px; }
+details.src { margin-top: 4px; font-size: 13px; color: var(--muted); }
+details.src div { margin: 2px 0; }
+.tabs a { font-size: 12px; }
